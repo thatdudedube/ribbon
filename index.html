@@ -138,6 +138,13 @@ select.chipbtn{appearance:none;padding-right:12px}
 .surprise{padding:14px;border-radius:14px;background:var(--soft);display:flex;gap:12px;align-items:center}
 .surprise .mini{flex:0 0 auto}
 .filter{display:flex;gap:6px;flex-wrap:wrap}
+.fchips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 28px),transparent)}
+.fchips::-webkit-scrollbar{display:none}
+.fchips button{flex:0 0 auto;border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 13px;font:600 13px var(--body);cursor:pointer;color:var(--muted);white-space:nowrap;min-height:36px}
+.fchips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chipsep{flex:0 0 1px;background:var(--line);margin:6px 2px}
+.ptr{position:fixed;top:0;left:0;bottom:0;width:4px;z-index:60;background:var(--accent);opacity:0;transition:opacity .2s}
+.sheet{touch-action:pan-y}
 .filter button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
 .filter button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .settle{display:grid;grid-template-columns:1fr auto;gap:6px 12px;padding:14px;align-items:center;border-left:5px solid var(--warn)}
@@ -676,7 +683,8 @@ function viewLists(){
     body += `<p class="seghint">${side==="wish"?`What ${esc(r)} has asked for.`:`Your secret ideas for ${esc(r)}. ${esc(r)} can't see this tab.`}</p>`;
     items = items.filter(i=> side==="wish" ? visibleOnOwn(i) : !visibleOnOwn(i));
   }
-  body += `<div class="filter" role="group" aria-label="Filter">${[["all","All"],["idea","Ideas"],["claimed","Claimed"],["bought","Bought"],["history","History & ratings"],["foryou","Gift ideas"]].map(([k,l])=>`<button type="button" data-act="filter" data-f="${k}" aria-pressed="${S.filter===k}">${l}</button>`).join("")}</div>`;
+  const chip=([k,l])=>`<button type="button" data-act="filter" data-f="${k}" aria-pressed="${S.filter===k}">${l}</button>`;
+  body += `<div class="fchips" role="group" aria-label="Show">${[["all","All"],["idea","Ideas"],["claimed","Claimed"],["bought","Bought"]].map(chip).join("")}<span class="chipsep" aria-hidden="true"></span>${[["history","🕘 History"],["foryou","✨ AI ideas"]].map(chip).join("")}</div>`;
   if(S.filter==="history"){
     const hist=S.items.filter(i=>i.for===r && i.status==="bought").sort((a,b)=>Number(b.year)-Number(a.year));
     if(!hist.length) return head+body+`<div class="empty">Nothing bought for ${esc(r)} yet.</div></div>`;
@@ -702,7 +710,7 @@ function trackerCard(){
   const others=people.filter(r=>r!==S.me);
   const bought=S.items.filter(i=>i.status==="bought" && Number(i.year)===S.year && i.occasion!=="birthday" && !(i.for===S.me));
   const post=bought.filter(i=>(i.stage||"ordered")==="ordered").length, wrap=bought.filter(i=>i.stage==="arrived").length, wrapped=bought.filter(i=>i.stage==="wrapped").length;
-  const min=store("ribbon-trk-min")==="1";
+  const min=store("ribbon-trk-min")!=="0";
   return `<div class="card tracker"><button type="button" class="trkh" data-act="trkmin" aria-expanded="${!min}"><b>Christmas progress</b><span class="hint">${done.length} of ${others.length} sorted ${min?"▾":"▴"}</span></button>
     ${min?"":`<div class="trk">${others.map(r=>`<button type="button" class="trkp ${sortedFor(r)?"ok":""}" data-act="rec" data-r="${r}" style="--paper:var(--p-${r})"><span class="tick" aria-hidden="true">${sortedFor(r)?"✓":""}</span>${esc(r)}</button>`).join("")}<span class="trkp me" title="Your own presents are a surprise"><span class="tick">?</span>You</span></div>
     ${bought.length?`<div class="hint">${post} on order · ${wrap} arrived, to wrap · ${wrapped} wrapped</div>`:""}`}</div>`;
@@ -742,7 +750,9 @@ function topPickId(r){ const s=pickScores(r); if(!s.length) return null; if(s[1]
 function picksCard(r){
   const sc=pickScores(r).slice(0,3); const voted=votersFor(r).filter(v=>S.picks.some(x=>x.id===pickDocId(r,v)&&(x.ids||[]).length));
   const canVote=votersFor(r).includes(S.me) && votable(r).length;
-  let h=`<div class="card picks"><div class="row"><h2>Top picks for ${esc(r)}</h2><span class="hint">${voted.length} of ${votersFor(r).length} voted</span></div>`;
+  if(!canVote || S.readonly) return "";
+  if(myPicks(r).length) return `<p class="hint" style="margin:0">You've ranked your top 3 for ${esc(r)}. <button type="button" class="linkbtn" data-act="rankpicks">Change</button></p>`;
+  let h=`<div class="card picks"><div class="row"><h2>Top picks for ${esc(r)}</h2></div>`;
   if(!sc.length) h+=`<p class="hint" style="margin:0">Each of you ranks your favourite 3 ideas for ${esc(r)}. The one with the most points becomes the top recommendation.</p>`;
   else {
     const tp=topPickId(r), max=sc[0].pts;
@@ -868,8 +878,8 @@ function proposeSheet(base, replacing){
 function updateSums(){ RECIPS.forEach(r=>{ const el=document.getElementById("sum-"+r); if(!el) return; let s=0; PEOPLE.forEach(p=>{ const i=document.getElementById(`s-${r}-${p}`); if(i) s+=Number(i.value)||0; }); el.textContent=(Math.round(s*100)/100)+"%"; el.className="sum "+(Math.abs(s-100)<0.01?"pos":"neg"); }); }
 
 /* ---------- sheets ---------- */
-function openSheet(html, person){ $("#overlay").innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" ${person?`style="--paper:var(--p-${esc(person)})"`:""}>${html}</div></div>`; const f=$("#overlay").querySelector("input,select,textarea,button"); if(f) f.focus(); }
-function closeSheet(){ $("#overlay").innerHTML=""; }
+function openSheet(html, person){ if(!$("#overlay").innerHTML) navPush("sheet"); $("#overlay").innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true" ${person?`style="--paper:var(--p-${esc(person)})"`:""}>${html}</div></div>`; const f=$("#overlay").querySelector("input,select,textarea,button"); if(f) f.focus(); }
+function closeSheet(fromBack){ const had=!!$("#overlay").innerHTML; $("#overlay").innerHTML=""; if(had && !fromBack && history.state && history.state.rb==="sheet"){ NAV.skip=true; history.back(); } }
 function opts(list, sel, blank){ return (blank?`<option value="">${blank}</option>`:"") + list.map(x=>`<option ${x===sel?"selected":""}>${esc(x)}</option>`).join(""); }
 
 function words(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9 ]+/g," ").split(/\s+/).filter(w=>w.length>2 && !["the","and","for","with","one","new","set"].includes(w)); }
@@ -1189,7 +1199,7 @@ const stamp = () => new Date().toISOString();
 
 document.addEventListener("click", async ev=>{
   const t=ev.target.closest("[data-act],[data-view]"); if(!t) return;
-  if(t.dataset.view){ S.view=t.dataset.view; render(); window.scrollTo(0,0); return; }
+  if(t.dataset.view){ const v=t.dataset.view; if(v==="lists" && S.view!=="lists" && history.state && history.state.rb==="view"){ history.back(); return; } setView(v, S.view==="lists"); return; }
   const a=t.dataset.act;
   if(a==="scrim"){ if(ev.target===t) closeSheet(); return; }
   if(a==="close"){ closeSheet(); return; }
@@ -1199,7 +1209,7 @@ document.addEventListener("click", async ev=>{
   if(a==="gprofile"){ giftProfileSheet(t.dataset.r); return; }
   if(a==="side"){ S.side=t.dataset.s; render(); return; }
   if(a==="lockedwraps"){ toast("That's where the others keep surprise ideas for you. It stays locked."); return; }
-  if(a==="trkmin"){ store("ribbon-trk-min", store("ribbon-trk-min")==="1"?"0":"1"); render(); return; }
+  if(a==="trkmin"){ store("ribbon-trk-min", store("ribbon-trk-min")!=="0"?"0":"1"); render(); return; }
   if(a==="lstep"){ const em=(document.querySelector('#main input[type=email]')||{}).value; S.login={step:t.dataset.s,msg:"",email:em||S.login.email||""}; render(); return; }
   if(a==="enablepush"){ t.disabled=true; const r=await RB.enablePush(S.me).catch(e=>({ok:false,err:e})); t.disabled=false; if(r.ok){ toast("Reminders are on for this phone"); } else toast(r.denied?"Notifications are blocked. Turn them on for Ribbon in your phone's Settings.":"Couldn't turn on reminders. Try again."); if(document.querySelector("#overlay .sheet")) accountSheet(); render(); return; }
   if(a==="disablepush"){ await RB.disablePush().catch(()=>{}); toast("Reminders are off for this phone"); accountSheet(); render(); return; }
@@ -1318,11 +1328,11 @@ document.addEventListener("submit", async ev=>{
     if(!window.RB){ err.textContent="Still connecting. Try again in a moment."; return; }
     const email=(d.email||"").trim(); btn.disabled=true; err.textContent="";
     try{
-      if(f.id==="signinForm"){ S.login.email=email; await RB.signIn(email,d.pw||""); return; }
+      if(f.id==="signinForm"){ S.login.email=email; S.justSignedIn=true; await RB.signIn(email,d.pw||""); return; }
       if(f.id==="resetForm"){ await RB.resetPassword(email); S.login={step:"signin",email,msg:""}; render(); toast("Reset link sent to "+email+". Check your inbox (and junk)."); return; }
       const pw=d.pw||"";
       if(pw.length<6){ err.textContent="Use at least 6 characters."; btn.disabled=false; return; }
-      if(f.id==="createForm"){ if(pw!==d.pw2){ err.textContent="The two passwords don't match."; btn.disabled=false; return; } S.login.email=email; await RB.signUp(email,pw); return; }
+      if(f.id==="createForm"){ if(pw!==d.pw2){ err.textContent="The two passwords don't match."; btn.disabled=false; return; } S.login.email=email; S.justSignedIn=true; await RB.signUp(email,pw); return; }
       if(f.id==="pwForm"){ await RB.changePassword(d.old||"",pw); closeSheet(); toast("Password changed"); return; }
     }catch(e){ err.textContent = f.id==="pwForm" && /invalid-credential|wrong-password/.test((e&&e.code)||"") ? "Your current password isn't right." : authMsg(e); btn.disabled=false; }
     return;
@@ -1396,6 +1406,50 @@ $("#fab").addEventListener("click", ()=>itemSheet(null));
 $("#fbBtn").addEventListener("click", ()=>{ if(S.me) feedbackSheet(); });
 $("#srchBtn").addEventListener("click", ()=>{ if(S.me) searchSheet(); });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
+
+/* ---------- navigation: phone back button/gesture, swipe between tabs ---------- */
+const NAV={skip:false};
+const VIEWS=["lists","money","settings"];
+function navPush(kind){ try{ history.pushState({rb:kind},""); }catch(e){} }
+function setView(v,push){ if(v===S.view) return; if(push!==false && S.view==="lists") navPush("view"); S.view=v; render(); window.scrollTo(0,0); }
+try{ history.replaceState({rb:"root"},""); }catch(e){}
+window.addEventListener("popstate",()=>{
+  if(NAV.skip){ NAV.skip=false; return; }
+  if($("#overlay").innerHTML){ closeSheet(true); return; }
+  if(T){ endTour && endTour(); return; }
+  if(S.view!=="lists"){ S.view="lists"; render(); window.scrollTo(0,0); return; }
+});
+function goBack(){ if($("#overlay").innerHTML||S.view!=="lists") history.back(); }
+(function swipes(){
+  let sx=0, sy=0, st=0, edge=false, ok=false;
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent);
+  document.addEventListener("touchstart",e=>{
+    if(e.touches.length!==1){ ok=false; return; }
+    const t=e.touches[0]; sx=t.clientX; sy=t.clientY; st=Date.now();
+    edge = ios && sx<24;
+    ok = !!S.me && !e.target.closest(".recs,.fchips,input,textarea,select,#tour,.sheet,.trk,.seg button") ;
+    if(e.target.closest(".sheet")){ ok=false; SH.start(e); }
+  },{passive:true});
+  document.addEventListener("touchmove",e=>SH.move(e),{passive:true});
+  document.addEventListener("touchend",e=>{
+    SH.end(e);
+    const t=e.changedTouches[0]; const dx=t.clientX-sx, dy=t.clientY-sy, dt=Date.now()-st;
+    if(edge && dx>70 && Math.abs(dy)<60){ goBack(); return; }
+    if(!ok || dt>600 || Math.abs(dx)<70 || Math.abs(dy)>Math.abs(dx)*0.6) return;
+    const dir = dx<0 ? 1 : -1;
+    if(S.view==="lists" && isSibling(S.rec) && S.rec!==S.me && !["history","foryou"].includes(S.filter)){
+      if(dir===1 && S.side!=="wraps"){ S.side="wraps"; render(); return; }
+      if(dir===-1 && S.side==="wraps"){ S.side="wish"; render(); return; }
+    }
+    const i=VIEWS.indexOf(S.view)+dir; if(i>=0 && i<VIEWS.length){ if(VIEWS[i]==="lists") history.back(); else setView(VIEWS[i]); }
+  },{passive:true});
+})();
+/* Drag a sheet down to close it. */
+const SH={y0:0,dy:0,el:null,
+  start(e){ const s=e.target.closest(".sheet"); if(!s || s.scrollTop>0) { this.el=null; return; } this.el=s; this.y0=e.touches[0].clientY; this.dy=0; },
+  move(e){ if(!this.el) return; this.dy=Math.max(0,e.touches[0].clientY-this.y0); if(this.dy>8){ this.el.style.transform=`translateY(${this.dy}px)`; this.el.style.transition="none"; } },
+  end(){ if(!this.el) return; const s=this.el; this.el=null; s.style.transition="transform .2s ease"; if(this.dy>110){ s.style.transform="translateY(100%)"; setTimeout(()=>closeSheet(),180); } else s.style.transform=""; }
+};
 
 /* ---------- updates ---------- */
 let lastUpdCheck="";
@@ -1506,7 +1560,7 @@ render();
     try{ name=await RB.memberName(); }catch(e){ S.authReady=true; S.login={step:"signin",email:S.email,msg:e&&e.code==="unavailable"?"No connection. Check your internet and try again.":"Couldn't finish signing in. Try again."}; RB.signOut(); render(); return; }
     S.authReady=true;
     if(!name){ S.me=null; S.login={step:"notallowed",msg:""}; render(); return; }
-    const first=!S.me; S.me=name; S.peek={}; if(first) toast("Welcome, "+name);
+    S.me=name; S.peek={}; if(S.justSignedIn){ S.justSignedIn=false; toast("Welcome, "+name); }
     start(); render();
     if(pushState()==="on") RB.refreshPush(name).catch(()=>{});
   });
