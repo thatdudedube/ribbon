@@ -117,6 +117,13 @@ select.chipbtn{appearance:none;padding-right:12px}
 .item.bought::before{background:var(--accent)}
 .item.bought{background:linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, var(--surface)), var(--surface) 60%)}
 .item .t{font-weight:600;overflow-wrap:anywhere}
+.item .ithumb{width:40px;height:40px;border-radius:8px;object-fit:cover;vertical-align:middle;margin-right:10px;background:#fff;float:left}
+.autofill{display:flex;gap:10px;align-items:center;min-height:0}
+.autofill:empty{display:none}
+.autofill img{width:56px;height:56px;border-radius:10px;object-fit:cover;background:#fff;flex:0 0 auto}
+.item .ilink{color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:2px;padding:4px 0;position:relative;z-index:1}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .item .ilink{color:#5cc49a} }
+.item:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .item .s{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
 .item .star{color:var(--gold);margin-right:4px}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -486,7 +493,17 @@ function render(){
   }
   m.dataset.key="";
   setTimeout(()=>{ maybeTour(); if(T) drawTour(); },0);
-  if(S.view==="lists") m.innerHTML = viewLists();
+  if(S.view==="lists"){
+    const old=m.querySelector(".recs"), prevLeft=old?old.scrollLeft:null;
+    m.innerHTML = viewLists();
+    const rs=m.querySelector(".recs"), sel=rs&&rs.querySelector('.rec[aria-pressed="true"]');
+    if(rs && sel){
+      const target=Math.max(0, sel.parentElement.offsetLeft - (rs.clientWidth - sel.parentElement.offsetWidth)/2);
+      if(prevLeft===null || render.lastRec!==S.rec){ if(prevLeft!==null){ rs.scrollLeft=prevLeft; rs.scrollTo({left:target,behavior:"smooth"}); } else rs.scrollLeft=target; }
+      else rs.scrollLeft=prevLeft;
+    }
+    render.lastRec=S.rec;
+  }
   else if(S.view==="money") m.innerHTML = viewMoney();
   else m.innerHTML = viewSettings();
 }
@@ -541,13 +558,15 @@ function accountSheet(){
 }
 function dismissed(k){ return store("ribbon-x-"+k)==="1"; }
 function note(k, inner, style){ if(dismissed(k)) return ""; return `<div class="notice ${style&&style.cls||""}" style="margin-top:12px;${style&&style.css||""}">${inner}<button type="button" class="nx" data-act="dismissnote" data-k="${esc(k)}" aria-label="Dismiss">×</button></div>`; }
+const canEditProfile = r => r===S.me || !isSibling(r);
 function giftProfileSheet(r){
   const sum=profileSummary(r), bi=bdayInfo(r), me=r===S.me;
   const rows=sum.map(([k,v])=>`<div><b>${esc(k)}</b><span style="white-space:pre-wrap">${esc(v)}</span></div>`).join("");
   openSheet(`<h2>${me?"Your gift profile":esc(r)+"'s gift profile"}</h2>
-    ${bi?`<p class="hint" style="margin:0">${esc(bdayText(r))} · ${esc(bi.label)}</p>`:""}
+    ${bi&&bi.soon?`<p class="hint" style="margin:0">${esc(bdayText(r))} · ${esc(bi.label)}</p>`:""}
     ${rows?`<div class="gp">${rows}</div>`:`<p class="hint" style="margin:0">No sizes, likes or birthday saved for ${me?"you":esc(r)} yet.</p>`}
-    <div class="actions">${S.readonly?"":`<button type="button" class="btn" data-act="prefs" data-r="${esc(r)}">${rows?"Edit profile":"Add details"}</button>`}<button type="button" class="btn ghost" data-act="close">Close</button></div>`);
+    <div class="actions">${S.readonly||!canEditProfile(r)?"":`<button type="button" class="btn" data-act="prefs" data-r="${esc(r)}">${rows?"Edit profile":"Add details"}</button>`}<button type="button" class="btn ghost" data-act="close">Close</button></div>
+    ${canEditProfile(r)?"":`<p class="hint" style="margin:0">Only ${esc(r)} can change this.</p>`}`);
 }
 const PF_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3.5 12.2V5a1.5 1.5 0 0 1 1.5-1.5h7.2a1.5 1.5 0 0 1 1 .44l7.4 7.4a1.5 1.5 0 0 1 0 2.12l-7.2 7.2a1.5 1.5 0 0 1-2.12 0l-7.4-7.4a1.5 1.5 0 0 1-.38-1.06Z"/><circle cx="8.3" cy="8.3" r="1.6"/></svg>`;
 function recCard(r){
@@ -561,7 +580,7 @@ function recCard(r){
       `<small>${gbp(sp.bought)} of ${gbp(b)}</small><span class="bar"><i class="${over}" style="width:${pct}%"></i></span>`}</span>
   </button>${r==="Parents"?"":`<button type="button" class="pfbtn" data-act="gprofile" data-r="${r}" aria-label="${r===S.me?"Your gift profile":esc(r)+"'s gift profile"}" title="Gift profile">${PF_ICON}</button>`}</div>`;
 }
-/* A bought gift counts as given (and is revealed to the person) on 25 December of its year, or earlier if the buyer marks it as given. */
+/* A bought gift is revealed to the person only once the buyer marks it as given. */
 /* ---------- seasons, birthdays, profiles ---------- */
 const BDAY_WINDOW=30, BDAY_URGENT=7;
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -600,10 +619,11 @@ function profileSummary(r){
 function profileText(r){ const s=profileSummary(r); return s.length? s.map(([k,v])=>k+": "+v).join("; ") : "none noted"; }
 function afterXmas(y){ const t=new Date(); return t >= new Date(Number(y),11,25); }
 function isGiven(i){
-  if(i.status!=="bought") return false; if(i.given) return true;
-  if(i.occasion==="birthday"){ const b=bdayParts(i.for); return b ? todayDate() >= new Date(Number(i.year),b.mm-1,b.dd) : false; }
-  return afterXmas(i.year);
+  return i.status==="bought" && !!i.given;
 }
+/* The day a gift is meant for: the birthday in its year, or Christmas Day. */
+function giftDay(i){ if(i.occasion==="birthday"){ const b=bdayParts(i.for); if(b) return new Date(Number(i.year),b.mm-1,b.dd); } return new Date(Number(i.year),11,25); }
+function toMarkGiven(){ return S.items.filter(i=>i.status==="bought" && !i.given && (i.paidBy||i.claimedBy)===S.me && todayDate()>giftDay(i)).sort((a,b)=>giftDay(a)-giftDay(b)); }
 function canRate(i){ return isGiven(i) && (isSibling(i.for) ? S.me===i.for : !!S.me); }
 function receivedFor(r){ return S.items.filter(i=>i.for===r && isGiven(i)).sort((a,b)=>Number(b.year)-Number(a.year) || String(a.title).localeCompare(b.title)); }
 function starStr(n){ n=Math.round(Number(n)||0); return "★★★★★".slice(0,n)+"☆☆☆☆☆".slice(0,5-n); }
@@ -658,6 +678,8 @@ function viewLists(){
     head += note("bd-"+x+"-"+b.year+"-"+(b.days===0?"day":b.urgent?"wk":"mo"), `<span class="cake" aria-hidden="true"></span><span><b>${esc(bdayText(x))}</b> (${esc(b.label)}). ${x===S.me?"Make sure your wish list is up to date.":claimed?`${claimed} gift${claimed===1?"":"s"} claimed so far.`:"Nothing claimed yet."} <button type="button" class="linkbtn" data-act="rec" data-r="${esc(x)}">${x===S.me?"Open my list":"Open "+esc(x)+"'s list"}</button></span>`, {cls:"bdaynote "+(b.urgent?"urgent":""), css:"--paper:var(--p-"+x+")"});
   });
   if(S.me && S.loaded.prefs && !(S.prefs[S.me]||{}).profileDone && (S.profiles[S.me]||{}).tutorialDone) head += note("fillprofile", `Add your sizes, likes and birthday so the others can get your presents right. <button type="button" class="linkbtn" data-act="prefs" data-r="${esc(S.me)}">Fill in my gift profile</button>`, {css:"border-color:var(--accent)"});
+  const tmg=S.me?toMarkGiven():[];
+  if(tmg.length) head += note("mg-"+tmg.map(i=>i.id).join("."), `${tmg.length===1?`Has <b>${esc(tmg[0].title)}</b> for ${esc(label(tmg[0].for))} been given yet?`:`${tmg.length} gifts you bought are past their day. Have they been given?`} <button type="button" class="linkbtn" data-act="open" data-id="${esc(tmg[0].id)}">Mark as given</button>`, {css:"border-color:var(--accent)"});
   head += trackerCard() + tidyBanner();
   head += `<div class="recs" role="group" aria-label="Whose list">${RECIPS.map(recCard).join("")}</div>`;
   const nOwn=items.filter(visibleOnOwn).length;
@@ -774,11 +796,11 @@ function rankSheet(r){
 function itemRow(i,hide){
   const u=safeUrl(i.link);
   const pill = hide ? "" : i.status==="bought" ? `<span class="pill bought">${isGiven(i)?"Given":"Bought"}${i.paidBy?" by "+esc(i.paidBy):""}</span>` : i.status==="claimed" ? `<span class="pill claimed">${esc(i.claimedBy||"Someone")} is getting this</span>` : `<span class="pill">Idea</span>`;
-  return `<button type="button" class="item ${hide?"":esc(i.status)}" data-act="open" data-id="${esc(i.id)}">
-    <span class="t">${i.mostWanted?`<span class="star" title="Most wanted">★</span>`:""}${esc(i.title)}${!hide&&i.status!=="bought"&&topPickId(i.for)===i.id?` <span class="toppick">Top recommended</span>`:""}</span>
+  return `<div role="button" tabindex="0" class="item ${hide?"":esc(i.status)}" data-act="open" data-id="${esc(i.id)}">
+    <span class="t">${safeUrl(i.image)?`<img class="ithumb" src="${esc(safeUrl(i.image))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:""}${i.mostWanted?`<span class="star" title="Most wanted">★</span>`:""}${esc(i.title)}${!hide&&i.status!=="bought"&&topPickId(i.for)===i.id?` <span class="toppick">Top recommended</span>`:""}</span>
     <span class="price">${i.price? gbp(i.price):""}</span>
-    <span class="s">${pill}${!hide&&i.addedBy&&i.addedBy!==i.for&&isSibling(i.for)?`<span class="tag">Suggested by ${esc(i.addedBy)}</span>`:""}${!hide&&commentsFor(i.id).length?`<span class="tag">${commentsFor(i.id).length} comment${commentsFor(i.id).length===1?"":"s"}</span>`:""}${!hide&&i.status==="bought"&&!isGiven(i)?`<span class="tag">${esc((STAGES.find(s=>s[0]===(i.stage||"ordered"))||["","Ordered"])[1])}</span>`:""}${!hide&&S.me!==i.for&&myPicks(i.for).includes(i.id)?`<span class="tag">Your #${myPicks(i.for).indexOf(i.id)+1}</span>`:""}${!hide&&i.hiddenByOwner?`<span class="tag">${esc(i.for)} removed this from their list</span>`:""}${Number(i.year)<S.year?`<span class="tag">From ${esc(i.year)}</span>`:""}${u?`<span>${esc(host(u))}</span>`:""}${i.note?`<span>${esc(i.note)}</span>`:""}</span>
-  </button>`;
+    <span class="s">${pill}${!hide&&i.addedBy&&i.addedBy!==i.for&&isSibling(i.for)?`<span class="tag">Suggested by ${esc(i.addedBy)}</span>`:""}${!hide&&commentsFor(i.id).length?`<span class="tag">${commentsFor(i.id).length} comment${commentsFor(i.id).length===1?"":"s"}</span>`:""}${!hide&&i.status==="bought"&&!isGiven(i)?`<span class="tag">${esc((STAGES.find(s=>s[0]===(i.stage||"ordered"))||["","Ordered"])[1])}</span>`:""}${!hide&&S.me!==i.for&&myPicks(i.for).includes(i.id)?`<span class="tag">Your #${myPicks(i.for).indexOf(i.id)+1}</span>`:""}${!hide&&i.hiddenByOwner?`<span class="tag">${esc(i.for)} removed this from their list</span>`:""}${Number(i.year)<S.year?`<span class="tag">From ${esc(i.year)}</span>`:""}${u?`<a class="ilink" href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))} ↗</a>`:""}${i.note?`<span>${esc(i.note)}</span>`:""}</span>
+  </div>`;
 }
 function pyTag(bi){ return bi.carry ? ` (${bi.carry>0?"+":"−"}${gbp(Math.abs(bi.carry))} PY)` : ""; }
 function budgetChart(){
@@ -890,15 +912,15 @@ function forHint(r){
   if(r==="Parents") return "A joint present for Mum and Dad together. It counts half towards each of their budgets.";
   return "Everyone can see ideas for "+r+".";
 }
-function itemSheet(i){
-  const isNew=!i; i=i||{for:S.rec,status:"idea",title:"",link:"",price:"",note:""};
+function itemSheet(i, prefill){
+  const isNew=!i; i=i||Object.assign({for:S.rec,status:"idea",title:"",link:"",price:"",note:"",image:""}, prefill||{});
   const hide = !isNew && hiddenFor(i.for);
   const status = hide ? "" : i.status;
   openSheet(`<form id="itemForm" style="display:grid;gap:14px" data-id="${esc(i.id||"")}">
     <div class="row"><h2>${isNew?"Add an idea":"Gift details"}</h2>${!isNew&&!hide?(i.status==="bought"?`<span class="pill bought">Bought</span>`:i.status==="claimed"?`<span class="pill claimed">Claimed by ${esc(i.claimedBy||"someone")}</span>`:`<span class="pill">Idea</span>`):""}</div>
     <div class="field"><label for="f-for">For</label><select id="f-for" name="for" ${!isNew?"disabled":""}>${RECIPS.map(x=>`<option value="${x}" ${x===i.for?"selected":""}>${esc(label(x))}</option>`).join("")}</select>${!isNew?`<input type="hidden" name="for" value="${esc(i.for)}">`:""}<span class="hint" id="forHint">${forHint(i.for)}</span></div>
     <div class="field"><label for="f-title">What is it?</label><input id="f-title" name="title" required maxlength="200" value="${esc(i.title)}" placeholder="e.g. Logitech MX Keys S, black"></div>
-    <div class="field"><label for="f-link">Link (optional)</label><input id="f-link" name="link" type="url" inputmode="url" value="${esc(i.link||"")}" placeholder="https://…"></div>
+    <div class="field"><label for="f-link">Link (optional)</label><input id="f-link" name="link" type="url" inputmode="url" value="${esc(i.link||"")}" placeholder="Paste a shop link to fill in the details"><input type="hidden" name="image" id="f-image" value="${esc(i.image||"")}"><div id="f-auto" class="autofill" aria-live="polite">${i.image?`<img src="${esc(i.image)}" alt="" referrerpolicy="no-referrer">`:""}</div></div>
     <div class="two"><div class="field"><label for="f-price">Price £ (optional)</label><input id="f-price" name="price" type="number" inputmode="decimal" min="0" step="0.01" value="${i.price===null||i.price===undefined?"":esc(i.price)}"></div>
     <div class="field"><label for="f-note">Size, colour, notes</label><input id="f-note" name="note" maxlength="200" value="${esc(i.note||"")}"></div></div>
     <label class="check"><input type="checkbox" name="mostWanted" ${i.mostWanted?"checked":""}><span><b>★ Most wanted</b><br><span class="hint">Shows first, so the others know what matters most.</span></span></label>
@@ -911,12 +933,33 @@ function itemSheet(i){
       ${status!=="bought"?`<button class="btn ghost" type="button" data-act="bought">Mark as bought</button>`:""}
       ${status==="claimed"?`<button class="btn ghost" type="button" data-act="unclaim">Unclaim</button>`:""}
       ${status==="bought"?`<button class="btn ghost" type="button" data-act="unbuy">Undo purchase</button>`:""}
-      ${status==="bought"&&!isGiven(i)?`<button class="btn ghost" type="button" data-act="given">Mark as given now</button>`:""}
+      ${status==="bought"&&!isGiven(i)?`<button class="btn ghost" type="button" data-act="given">Mark as given</button>`:""}
     </div>`:""}
     ${(!isNew && !hide && status==="bought") ? boughtExtras(i) : ""}
     ${(!isNew && !hide) ? commentsBlock(i) : ""}
     ${!isNew?`<button class="btn danger" type="button" data-act="del" data-step="1">Delete this item</button>`:""}
   </form>`, i.for);
+  const li=document.getElementById("f-link");
+  if(li && !hide){
+    li.addEventListener("change",()=>autofill(true));
+    li.addEventListener("paste",()=>setTimeout(()=>autofill(true),50));
+    if(isNew && i.link) autofill(false);
+  }
+}
+/* Reads the shop page behind a link and fills in anything still empty. */
+async function autofill(){
+  const li=document.getElementById("f-link"), box=document.getElementById("f-auto"); if(!li||!box||!window.RB||!RB.linkPreview) return;
+  const u=safeUrl((li.value||"").trim()); if(!u || box.dataset.for===u) return; box.dataset.for=u;
+  box.innerHTML=`<span class="hint">Getting the details from ${esc(host(u))}…</span>`;
+  try{
+    const r=await RB.linkPreview(u); if(box.dataset.for!==u) return;
+    const t=document.getElementById("f-title"), pr=document.getElementById("f-price"), im=document.getElementById("f-image");
+    const got=[];
+    if(r.title && t && !t.value.trim()){ t.value=r.title; got.push("name"); }
+    if(r.price && pr && !pr.value){ pr.value=r.price; got.push("price"); }
+    if(r.image && im){ im.value=r.image; got.push("photo"); }
+    box.innerHTML = (r.image?`<img src="${esc(r.image)}" alt="" referrerpolicy="no-referrer">`:"") + `<span class="hint">${got.length?"Filled in the "+got.join(", ")+". Check they're right.":"Couldn't find any details on that page. Fill them in yourself."}</span>`;
+  }catch(e){ if(box.dataset.for===u) box.innerHTML=`<span class="hint">Couldn't read that page. Fill in the details yourself.</span>`; }
 }
 function sharesOf(i){
   const sp=cfgFor(Number(i.year)).splits[i.for]||{}; const tot=Object.values(sp).reduce((a,b)=>a+(Number(b)||0),0)||100;
@@ -1070,7 +1113,7 @@ function tourSteps(){ const me=S.me; return [
   {sel:".recs", title:"Everyone's lists", body:"Tap a person to open their list. The bar shows how much of their budget has been spent."},
   {demo:true, title:"How a gift moves along", body:"Each gift goes through three stages. Tap the example gift to move it along."},
   {sel:"#fab", title:"Adding ideas", body:"Tap here to add an idea. Put it on your own wish list, or suggest one for someone else. Suggestions go under wraps, hidden from the person they're for. On each person's list you can also rank your top 3, and the family favourite shows as Top recommended."},
-  {sel:`.rec[data-r="${me}"]`, title:"Your list stays a surprise", body:"On your own list you only see the ideas you added. Whatever the others suggest or buy for you stays hidden until Christmas Day, or until the buyer marks it as given."},
+  {sel:`.rec[data-r="${me}"]`, title:"Your list stays a surprise", body:"On your own list you only see the ideas you added. Whatever the others suggest or buy for you stays hidden until they mark it as given."},
   {sel:'.filter button[data-f="history"]', title:"Ratings and gift ideas", body:"Once gifts are given, everyone rates theirs out of 5. History & ratings shows what landed well, and Gift ideas uses those ratings to suggest presents they're likely to love. Parents' gifts are rated on their behalf."},
   {budget:true, title:"Going over or under budget", body:"Up to 10% over a budget shows amber. More than that shows red, so check with the others first. If you turn on budget carry-over in Budgets & splits, here's what happens the next year:"},
   {sel:'nav.tabs button[data-view="money"]', title:"Money", body:"See who owes whom, using the fewest payments, and record repayments as they happen."},
@@ -1198,6 +1241,7 @@ const byId = id => S.items.find(i=>i.id===id);
 const stamp = () => new Date().toISOString();
 
 document.addEventListener("click", async ev=>{
+  if(ev.target.closest("a[href]")) return;
   const t=ev.target.closest("[data-act],[data-view]"); if(!t) return;
   if(t.dataset.view){ const v=t.dataset.view; if(v==="lists" && S.view!=="lists" && history.state && history.state.rb==="view"){ history.back(); return; } setView(v, S.view==="lists"); return; }
   const a=t.dataset.act;
@@ -1219,7 +1263,7 @@ document.addEventListener("click", async ev=>{
   if(a==="updlater"){ $("#updBar").innerHTML=""; return; }
   if(a==="importold"){ const fi=document.getElementById("importFile"); if(fi){ fi.onchange=()=>importOld(fi.files[0]); fi.click(); } return; }
   if(a==="account"){ accountSheet(); return; }
-  if(a==="prefs"){ prefsSheet(t.dataset.r||S.rec); return; }
+  if(a==="prefs"){ const r=t.dataset.r||S.rec; if(!canEditProfile(r)){ toast("Only "+r+" can change their gift profile."); return; } prefsSheet(r); return; }
   if(a==="stage"){ const form2=t.closest("form"); const it2=form2&&byId(form2.dataset.id); if(!it2) return; const k=t.dataset.k; if(await write(()=>S.db.collection("items").doc(it2.id).update({stage:k,updatedAt:stamp()}))){ it2.stage=k; document.querySelectorAll('[data-act="stage"]').forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.k===k))); if(k==="wrapped") confetti(50); render(); } return; }
   if(a==="addcomment"){ const form2=t.closest("form"); const it2=form2&&byId(form2.dataset.id); const inp=document.getElementById("cmt-t"); const text=(inp&&inp.value||"").trim(); if(!it2||!text) return; const body={itemId:it2.id,for:it2.for,by:S.me,text,at:stamp()};
     if(await write(()=>S.db.collection("comments").add(body))){ S.comments.push(Object.assign({id:"tmp"+Date.now()},body)); inp.value=""; const box=document.getElementById("cmts"); if(box){ const tmp=document.createElement("div"); tmp.innerHTML=commentsBlock(it2); box.replaceWith(tmp.querySelector("#cmts")); } render(); } return; }
@@ -1341,7 +1385,8 @@ document.addEventListener("submit", async ev=>{
     const err=f.querySelector("#itemErr"); const title=(d.title||"").trim(); if(!title){ err.textContent="Give the item a name."; return; }
     const link=(d.link||"").trim(); if(link && !safeUrl(link)){ err.textContent="That link doesn't look right. It should start with https://"; return; }
     const price = d.price===""||d.price==null ? null : Math.round(Number(d.price)*100)/100;
-    const body={for:d.for,title,link,price,note:(d.note||"").trim(),mostWanted:d.mostWanted==="on",updatedAt:stamp()};
+    const body={for:d.for,title,link,price,note:(d.note||"").trim(),mostWanted:d.mostWanted==="on",image:safeUrl(d.image||"")||"",updatedAt:stamp()};
+    if(!link) body.image="";
     if(d.paidBy!==undefined && d.paidBy) body.paidBy=d.paidBy;
     if(f.dataset.id){ if(await write(()=>S.db.collection("items").doc(f.dataset.id).update(body),err)){ closeSheet(); toast("Saved"); } }
     else {
@@ -1405,7 +1450,7 @@ $("#meBtn").addEventListener("click", ()=>{ if(S.me) accountSheet(); });
 $("#fab").addEventListener("click", ()=>itemSheet(null));
 $("#fbBtn").addEventListener("click", ()=>{ if(S.me) feedbackSheet(); });
 $("#srchBtn").addEventListener("click", ()=>{ if(S.me) searchSheet(); });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches('div[role="button"][data-act]')){ e.preventDefault(); e.target.click(); } });
 
 /* ---------- navigation: phone back button/gesture, swipe between tabs ---------- */
 const NAV={skip:false};
@@ -1515,6 +1560,19 @@ async function importOld(file){
   }catch(e){ toast(e&&e.message==="shape" ? "That file isn't an export from the old app." : "Import didn't work. Try again."); }
 }
 
+/* ---------- shared from another app (Android share menu) ---------- */
+(function(){
+  try{
+    const q=new URLSearchParams(location.search); if(!q.has("share")) return;
+    const title=q.get("title")||"", text=q.get("text")||"", url=q.get("url")||"";
+    const all=[url,text,title].filter(Boolean).join(" "); const m=all.match(/https?:\/\/[^\s<>"']+/i); const link=m?m[0].replace(/[).,]+$/,""):"";
+    let t=title.trim(); const rest=text.replace(link,"").trim(); if(!t||/^https?:/i.test(t)) t=rest;
+    S.pendingShare={link, title:t.replace(/https?:\/\/\S+/g,"").replace(/\s+/g," ").trim().slice(0,140)};
+    history.replaceState({rb:"root"},"",location.pathname);
+  }catch(e){}
+})();
+function openPendingShare(){ if(!S.pendingShare || !S.me) return; const p=S.pendingShare; S.pendingShare=null; S.view="lists"; render(); itemSheet(null,{link:p.link,title:p.title}); if(!p.link) toast("Nothing to add from that share."); }
+
 /* ---------- connect ---------- */
 render();
 (async function connect(){
@@ -1561,7 +1619,7 @@ render();
     S.authReady=true;
     if(!name){ S.me=null; S.login={step:"notallowed",msg:""}; render(); return; }
     S.me=name; S.peek={}; if(S.justSignedIn){ S.justSignedIn=false; toast("Welcome, "+name); }
-    start(); render();
+    start(); render(); setTimeout(openPendingShare,400);
     if(pushState()==="on") RB.refreshPush(name).catch(()=>{});
   });
 })();

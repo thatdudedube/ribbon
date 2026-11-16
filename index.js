@@ -4,6 +4,7 @@ const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/
 const { setGlobalOptions, logger } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const L = require("./lib");
+const dns = require("node:dns").promises;
 
 admin.initializeApp();
 setGlobalOptions({ region: "europe-west2", maxInstances: 2, memory: "256MiB" });
@@ -69,10 +70,36 @@ exports.ai = onCall({ timeoutSeconds: 120 }, async req => {
   return { text: (j.content || []).filter(b => b.type === "text").map(b => b.text).join("") };
 });
 
+/* Reads a shop page so a pasted or shared link fills in the name, price and photo. */
+const UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36";
+async function safeFetch(url, hops = 0) {
+  const u = new URL(url);
+  if (!/^https?:$/.test(u.protocol) || L.isPrivateHost(u.hostname)) throw new HttpsError("invalid-argument", "That link can't be read.");
+  const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
+  if (!addrs.length || addrs.some(a => L.isPrivateIp(a.address))) throw new HttpsError("invalid-argument", "That link can't be read.");
+  const r = await fetch(u.href, { redirect: "manual", signal: AbortSignal.timeout(9000), headers: { "user-agent": UA, "accept": "text/html,application/xhtml+xml", "accept-language": "en-GB,en;q=0.9" } });
+  if (r.status >= 300 && r.status < 400 && r.headers.get("location")) { if (hops >= 4) throw new HttpsError("unavailable", "Too many redirects."); return safeFetch(new URL(r.headers.get("location"), u).href, hops + 1); }
+  return { r, finalUrl: u.href };
+}
+exports.linkPreview = onCall({ timeoutSeconds: 30 }, async req => {
+  if (!(await isMember(req.auth && req.auth.uid))) throw new HttpsError("permission-denied", "Members only.");
+  const url = String((req.data && req.data.url) || "").slice(0, 2000);
+  let res; try { res = await safeFetch(url); } catch (e) { if (e instanceof HttpsError) throw e; throw new HttpsError("unavailable", "Couldn't reach that site."); }
+  const { r, finalUrl } = res;
+  if (!r.ok) throw new HttpsError("unavailable", "The site said no (" + r.status + ").");
+  const reader = r.body.getReader(); let html = "", got = 0; const dec = new TextDecoder();
+  while (got < 1500000) { const { done, value } = await reader.read(); if (done) break; got += value.length; html += dec.decode(value, { stream: true }); }
+  try { reader.cancel(); } catch (e) {}
+  return L.parseProduct(html, finalUrl);
+});
+
 /* Every morning at 9am London time: birthday and Christmas reminders. */
 exports.daily = onSchedule({ schedule: "0 9 * * *", timeZone: "Europe/London" }, async () => {
   const ps = await db.collection("prefs").get(); const prefs = {}; ps.docs.forEach(d => { prefs[d.id] = d.data(); });
-  for (const m of L.dailyMessages(prefs, L.londonToday())) await notify(m.to, m);
+  const t = L.londonToday();
+  const bought = await db.collection("items").where("status", "==", "bought").get();
+  const msgs = L.dailyMessages(prefs, t).concat(L.givenReminders(bought.docs.map(d => d.data()), prefs, t));
+  for (const m of msgs) await notify(m.to, m);
 });
 
 exports.onProposal = onDocumentCreated("proposals/{id}", async e => {

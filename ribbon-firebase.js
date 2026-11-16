@@ -178,7 +178,8 @@ try {
       await authM.reauthenticateWithCredential(u, authM.EmailAuthProvider.credential(u.email, oldPw));
       await authM.updatePassword(u, newPw);
     },
-    memberName, enablePush, disablePush, refreshPush: saveToken, importAll
+    memberName, enablePush, disablePush, refreshPush: saveToken, importAll,
+    linkPreview: url => call("linkPreview", { url })
   };
   window.dispatchEvent(new Event("rb-ready"));
 } catch (e) {

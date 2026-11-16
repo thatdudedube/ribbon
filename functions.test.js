@@ -41,3 +41,35 @@ test("item updates: thanks, given, rating", () => {
   const rt = L.itemUpdateMessages({}, { title: "Scarf", paidBy: "Emeka", rating: { by: "Chioma", stars: 5 } });
   assert.deepStrictEqual(rt[0].to, ["Emeka"]);
 });
+
+test("buyer is nudged to mark as given 1, 3 and 7 days after the day", () => {
+  const prefs = { Chioma: { birthday: "04-03" } };
+  const items = [
+    { title: "Scarf", for: "Chioma", status: "bought", paidBy: "Emeka", occasion: "birthday", year: 2026 },
+    { title: "Book", for: "Mum", status: "bought", paidBy: "Dube", occasion: "christmas", year: 2026 },
+    { title: "Done", for: "Mum", status: "bought", paidBy: "Dube", occasion: "christmas", year: 2026, given: true }
+  ];
+  assert.deepStrictEqual(L.givenReminders(items, prefs, { y: 2026, m: 4, d: 4 }).map(x => x.to), [["Emeka"]]);
+  assert.strictEqual(L.givenReminders(items, prefs, { y: 2026, m: 4, d: 5 }).length, 0);
+  assert.deepStrictEqual(L.givenReminders(items, prefs, { y: 2027, m: 1, d: 1 }).map(x => x.title), ["Has Book been given?"]);
+  assert.strictEqual(L.givenReminders(items, prefs, { y: 2026, m: 12, d: 25 }).length, 0);
+});
+
+test("reads name, price and photo from a product page", () => {
+  const og = `<html><head><meta property="og:title" content="Glide Soles &amp; Co"><meta property="og:image" content="/img/a.jpg"><meta property="product:price:amount" content="34.99"><meta property="product:price:currency" content="GBP"></head></html>`;
+  assert.deepStrictEqual(L.parseProduct(og, "https://glidesoles.com/p/x"), { title: "Glide Soles & Co", price: 34.99, image: "https://glidesoles.com/img/a.jpg" });
+  const ld = `<title>Shop</title><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Product","name":"MX Keys S","image":["https://x.com/k.png"],"offers":{"@type":"Offer","price":"109.99","priceCurrency":"GBP"}}]}</script>`;
+  assert.deepStrictEqual(L.parseProduct(ld, "https://x.com/"), { title: "MX Keys S", price: 109.99, image: "https://x.com/k.png" });
+  const amz = `<title>Amazon.co.uk : Anker Charger</title><span id="productTitle" class="a">  Anker Wireless Charger  </span><span class="a-offscreen">£1,019.00</span><img id="landingImage" data-old-hires="https://m.media-amazon.com/i.jpg">`;
+  assert.deepStrictEqual(L.parseProduct(amz, "https://www.amazon.co.uk/dp/1"), { title: "Anker Wireless Charger", price: 1019, image: "https://m.media-amazon.com/i.jpg" });
+  const usd = `<meta property="og:title" content="Thing"><meta property="og:price:amount" content="20"><meta property="og:price:currency" content="USD">`;
+  assert.strictEqual(L.parseProduct(usd, "https://a.com").price, null);
+});
+test("never fetches private addresses", () => {
+  for (const h of ["localhost", "127.0.0.1", "10.0.0.2", "169.254.169.254", "metadata.google.internal", "192.168.1.1", "[::1]", "172.20.0.1"]) assert.ok(L.isPrivateHost(h), h);
+  for (const h of ["www.amazon.co.uk", "8.8.8.8", "lakeland.co.uk"]) assert.ok(!L.isPrivateHost(h), h);
+});
+test("shared text becomes a link and a name", () => {
+  assert.deepStrictEqual(L.cleanShare("", "Anker Wireless Charger https://amzn.eu/d/abc", ""), { link: "https://amzn.eu/d/abc", title: "Anker Wireless Charger" });
+  assert.deepStrictEqual(L.cleanShare("Toastie maker", "", "https://lakeland.co.uk/t"), { link: "https://lakeland.co.uk/t", title: "Toastie maker" });
+});
