@@ -1,0 +1,98 @@
+name: Deploy Ribbon
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ribbon-deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put files into their folders
+        run: |
+          mkdir -p web/icons functions tests
+          for f in index.html sw.js version.json ribbon-firebase.js manifest.webmanifest; do [ -f "$f" ] && git mv -f "$f" web/ || true; done
+          for f in *.png; do [ -f "$f" ] && git mv -f "$f" web/icons/ || true; done
+          for f in index.js lib.js package.json; do [ -f "$f" ] && git mv -f "$f" functions/ || true; done
+          for f in *.test.js; do [ -f "$f" ] && git mv -f "$f" tests/ || true; done
+          find . -path ./.git -prune -o -type f -print | sort
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test tests/*.test.js
+
+  backend:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put files into their folders
+        run: |
+          mkdir -p web/icons functions tests
+          for f in index.html sw.js version.json ribbon-firebase.js manifest.webmanifest; do [ -f "$f" ] && git mv -f "$f" web/ || true; done
+          for f in *.png; do [ -f "$f" ] && git mv -f "$f" web/icons/ || true; done
+          for f in index.js lib.js package.json; do [ -f "$f" ] && git mv -f "$f" functions/ || true; done
+          for f in *.test.js; do [ -f "$f" ] && git mv -f "$f" tests/ || true; done
+          find . -path ./.git -prune -o -type f -print | sort
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Write credentials and settings
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ALLOWED: ${{ secrets.ALLOWED_EMAILS }}
+          AIKEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          printf 'ALLOWED_EMAILS="%s"\nANTHROPIC_API_KEY="%s"\n' "$ALLOWED" "$AIKEY" > functions/.env
+          test -s "$RUNNER_TEMP/sa.json" || (echo "FIREBASE_SERVICE_ACCOUNT secret is missing" && exit 1)
+          test -n "$ALLOWED" || (echo "ALLOWED_EMAILS secret is missing" && exit 1)
+      - run: npm install --omit=dev
+        working-directory: functions
+      - name: Deploy rules and functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx --yes firebase-tools@14 deploy --only firestore:rules,storage,functions --project ribbon-a1d6f --force --non-interactive
+
+  site:
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put files into their folders
+        run: |
+          mkdir -p web/icons functions tests
+          for f in index.html sw.js version.json ribbon-firebase.js manifest.webmanifest; do [ -f "$f" ] && git mv -f "$f" web/ || true; done
+          for f in *.png; do [ -f "$f" ] && git mv -f "$f" web/icons/ || true; done
+          for f in index.js lib.js package.json; do [ -f "$f" ] && git mv -f "$f" functions/ || true; done
+          for f in *.test.js; do [ -f "$f" ] && git mv -f "$f" tests/ || true; done
+          find . -path ./.git -prune -o -type f -print | sort
+      - name: Stamp the version
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          V="1.0.${{ github.run_number }}"
+          NOTES=$(printf '%s' "$MSG" | head -n1 | sed -E 's/^(Add files via upload|Update [^ ]+|Create [^ ]+)$//' | tr -d '"\\' | cut -c1-120)
+          sed -i "s/%%RIBBON_VERSION%%/$V/g" web/index.html web/sw.js web/version.json
+          sed -i "s/%%RIBBON_NOTES%%/${NOTES//\//\\/}/g" web/version.json
+          cat web/version.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
