@@ -90,6 +90,24 @@ select.chipbtn{appearance:none;padding-right:12px}
 .section{display:grid;gap:10px;padding-top:16px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.nx{position:absolute;top:6px;right:6px;width:30px;height:30px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.nx:hover{background:var(--soft)}
+.recwrap{position:relative;flex:0 0 auto;display:grid;scroll-snap-align:start}
+.pfbtn{position:absolute;top:7px;right:7px;width:32px;height:32px;border-radius:999px;border:0;background:rgba(255,255,255,.92);color:#1f3a2e;display:grid;place-items:center;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.pfbtn svg{width:18px;height:18px}
+.listbar{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:4px 2px 0}
+.listbar h2{margin:0}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:14px;background:var(--soft);border:1px solid var(--line)}
+.seg button{border:0;background:transparent;border-radius:10px;padding:10px 8px;font:600 14px var(--body);color:var(--muted);cursor:pointer;display:flex;gap:6px;align-items:center;justify-content:center}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.seg button.locked{opacity:.5;cursor:not-allowed}
+.seg .ct{font-size:12px;font-weight:700;background:var(--line);border-radius:999px;padding:1px 7px}
+.seghint{font-size:13px;color:var(--muted);margin:-2px 2px 0}
+.gp{display:grid;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.gp div{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:10px 12px;border-top:1px solid var(--line);font-size:14px}
+.gp div:first-child{border-top:0}
+.gp b{color:var(--muted);font-weight:600}
+.tracker .trkh{display:flex;justify-content:space-between;align-items:center;gap:8px;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;width:100%;text-align:left}
 .listhead{display:grid;gap:6px;padding:14px;border-radius:16px;background:var(--surface);border:1px solid var(--line);border-top:5px solid var(--paper,var(--accent))}
 .prefs{font-size:14px;display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
 .prefs span{white-space:pre-wrap}
@@ -171,7 +189,7 @@ nav.tabs svg{width:22px;height:22px}
 .lock .card{padding:18px;display:grid;gap:14px}
 .lock .hero{display:grid;gap:6px}
 .lock .hero h2{font-size:28px}
-.notice{padding:12px 14px;border-radius:12px;border:1px solid var(--warn);color:var(--ink);background:var(--surface);font-size:14px}
+.notice{position:relative;padding:12px 40px 12px 14px;border-radius:12px;border:1px solid var(--warn);color:var(--ink);background:var(--surface);font-size:14px}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline;justify-self:start}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);vertical-align:middle;animation:pulse 1.6s ease infinite}
 @keyframes pulse{50%{transform:scale(1.5);opacity:.6}}
@@ -514,16 +532,27 @@ function accountSheet(){
   <div class="actions"><button class="btn danger" type="button" data-act="signout">Sign out on this phone</button><button class="btn ghost" type="button" data-act="close">Close</button></div>
   <p class="ver">Ribbon ${esc(IS_DEV?"dev":APP_VERSION)} · ${esc(S.email)}</p>`);
 }
+function dismissed(k){ return store("ribbon-x-"+k)==="1"; }
+function note(k, inner, style){ if(dismissed(k)) return ""; return `<div class="notice ${style&&style.cls||""}" style="margin-top:12px;${style&&style.css||""}">${inner}<button type="button" class="nx" data-act="dismissnote" data-k="${esc(k)}" aria-label="Dismiss">×</button></div>`; }
+function giftProfileSheet(r){
+  const sum=profileSummary(r), bi=bdayInfo(r), me=r===S.me;
+  const rows=sum.map(([k,v])=>`<div><b>${esc(k)}</b><span style="white-space:pre-wrap">${esc(v)}</span></div>`).join("");
+  openSheet(`<h2>${me?"Your gift profile":esc(r)+"'s gift profile"}</h2>
+    ${bi?`<p class="hint" style="margin:0">${esc(bdayText(r))} · ${esc(bi.label)}</p>`:""}
+    ${rows?`<div class="gp">${rows}</div>`:`<p class="hint" style="margin:0">No sizes, likes or birthday saved for ${me?"you":esc(r)} yet.</p>`}
+    <div class="actions">${S.readonly?"":`<button type="button" class="btn" data-act="prefs" data-r="${esc(r)}">${rows?"Edit profile":"Add details"}</button>`}<button type="button" class="btn ghost" data-act="close">Close</button></div>`);
+}
+const PF_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3.5 12.2V5a1.5 1.5 0 0 1 1.5-1.5h7.2a1.5 1.5 0 0 1 1 .44l7.4 7.4a1.5 1.5 0 0 1 0 2.12l-7.2 7.2a1.5 1.5 0 0 1-2.12 0l-7.4-7.4a1.5 1.5 0 0 1-.38-1.06Z"/><circle cx="8.3" cy="8.3" r="1.6"/></svg>`;
 function recCard(r){
   const bi=budgetInfo(r), b=bi.total; const sp=spendFor(r); const hide=hiddenFor(r);
   const pct = b? Math.min(100, sp.bought/b*100):0; const ov = overState(sp.bought,b); const over = ov==="over"?"over":ov==="slight"?"slight":"";
   const n = shownItems(r).length;
-  return `<button type="button" class="rec" data-act="rec" data-r="${r}" aria-pressed="${S.rec===r}" style="--paper:var(--p-${r})">
+  return `<div class="recwrap"><button type="button" class="rec" data-act="rec" data-r="${r}" aria-pressed="${S.rec===r}" style="--paper:var(--p-${r})">
     <span class="box" aria-hidden="true"><span class="bow"></span></span>
     <span class="lab"><b>${esc(label(r))}${S.me===r?" (you)":""}</b>${bdayText(r,true)?`<span class="bdbadge">${esc(bdayText(r,true))}</span>`:""}
     ${r==="Parents" ? `<small>${gbp(sp.bought)} joint</small><span class="hint" style="font-size:11px">Half to each budget</span>` : hide? `<small>${gbp(b)} · ${Math.round(pct)}% used</small><span class="bar"><i class="${over}" style="width:${pct}%"></i></span>` :
       `<small>${gbp(sp.bought)} of ${gbp(b)}</small><span class="bar"><i class="${over}" style="width:${pct}%"></i></span>`}</span>
-  </button>`;
+  </button>${r==="Parents"?"":`<button type="button" class="pfbtn" data-act="gprofile" data-r="${r}" aria-label="${r===S.me?"Your gift profile":esc(r)+"'s gift profile"}" title="Gift profile">${PF_ICON}</button>`}</div>`;
 }
 /* A bought gift counts as given (and is revealed to the person) on 25 December of its year, or earlier if the buyer marks it as given. */
 /* ---------- seasons, birthdays, profiles ---------- */
@@ -614,36 +643,40 @@ function viewLists(){
   const mp=S.profiles[S.me]||{};
   let head = (mp.lastResetAt && store("gift-reset-seen-"+S.me)!==mp.lastResetAt) ? `<div class="notice" style="margin-top:12px">Your password was reset on ${esc(new Date(mp.lastResetAt).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}))} and a new one was set. If that wasn't you, someone else may have seen your list. <button type="button" class="linkbtn" data-act="seenreset">OK, hide this</button></div>` : "";
   const opr=openProposal();
-  if(needsMyOk(opr)) head += `<div class="notice" style="margin-top:12px;border-color:var(--gold)"><b>${esc(opr.by)}</b> suggested a change to budgets or splits. <button type="button" class="linkbtn" data-view="settings">Review it</button></div>`;
+  if(needsMyOk(opr)) head += note("prop-"+opr.id, `<b>${esc(opr.by)}</b> suggested a change to budgets or splits. <button type="button" class="linkbtn" data-view="settings">Review it</button>`, {css:"border-color:var(--gold)"});
   const toRate=S.me? receivedFor(S.me).filter(i=>!(i.rating&&i.rating.stars)).length : 0;
-  if(toRate && r!==S.me) head += `<div class="notice" style="margin-top:12px;border-color:var(--accent)">You've got ${toRate} gift${toRate===1?"":"s"} to rate. <button type="button" class="linkbtn" data-act="rec" data-r="${esc(S.me)}">Rate them</button></div>`;
+  if(toRate && r!==S.me) head += note("rate-"+toRate, `You've got ${toRate} gift${toRate===1?"":"s"} to rate. <button type="button" class="linkbtn" data-act="rec" data-r="${esc(S.me)}">Rate them</button>`, {css:"border-color:var(--accent)"});
   RECIPS.map(x=>({x,b:bdayInfo(x)})).filter(o=>o.b&&o.b.soon&&o.x!==r).sort((a,b)=>a.b.days-b.b.days).forEach(({x,b})=>{
     const claimed=listItems().filter(i=>i.for===x&&(i.status==="claimed"||(i.status==="bought"&&i.occasion==="birthday"&&Number(i.year)===b.year))).length;
-    head += `<div class="notice bdaynote ${b.urgent?"urgent":""}" style="margin-top:12px;--paper:var(--p-${x})"><span class="cake" aria-hidden="true"></span><span><b>${esc(bdayText(x))}</b> (${esc(b.label)}). ${x===S.me?"Make sure your wish list is up to date.":claimed?`${claimed} gift${claimed===1?"":"s"} claimed so far.`:"Nothing claimed yet."} <button type="button" class="linkbtn" data-act="rec" data-r="${esc(x)}">${x===S.me?"Open my list":"Open "+esc(x)+"'s list"}</button></span></div>`;
+    head += note("bd-"+x+"-"+b.year+"-"+(b.days===0?"day":b.urgent?"wk":"mo"), `<span class="cake" aria-hidden="true"></span><span><b>${esc(bdayText(x))}</b> (${esc(b.label)}). ${x===S.me?"Make sure your wish list is up to date.":claimed?`${claimed} gift${claimed===1?"":"s"} claimed so far.`:"Nothing claimed yet."} <button type="button" class="linkbtn" data-act="rec" data-r="${esc(x)}">${x===S.me?"Open my list":"Open "+esc(x)+"'s list"}</button></span>`, {cls:"bdaynote "+(b.urgent?"urgent":""), css:"--paper:var(--p-"+x+")"});
   });
-  if(S.me && S.loaded.prefs && !(S.prefs[S.me]||{}).profileDone && (S.profiles[S.me]||{}).tutorialDone) head += `<div class="notice" style="margin-top:12px;border-color:var(--accent)">Add your sizes, likes and birthday so the others can get your presents right. <button type="button" class="linkbtn" data-act="prefs" data-r="${esc(S.me)}">Fill in my profile</button></div>`;
+  if(S.me && S.loaded.prefs && !(S.prefs[S.me]||{}).profileDone && (S.profiles[S.me]||{}).tutorialDone) head += note("fillprofile", `Add your sizes, likes and birthday so the others can get your presents right. <button type="button" class="linkbtn" data-act="prefs" data-r="${esc(S.me)}">Fill in my gift profile</button>`, {css:"border-color:var(--accent)"});
   head += trackerCard() + tidyBanner();
   head += `<div class="recs" role="group" aria-label="Whose list">${RECIPS.map(recCard).join("")}</div>`;
-  const pr=(S.prefs[r]||{}).text||"";
-  const sum=profileSummary(r);
-  const prefsHtml= r==="Parents" ? `<div class="hint">Sizes and likes are on Mum's and Dad's own lists.</div>` : `<div class="prefs"><span>${sum.length?sum.map(([k,v])=>`<b>${esc(k)}:</b> ${esc(v)}`).join("<br>"):`<span class="hint">No sizes, likes or birthday saved for ${r===S.me?"you":esc(r)} yet.</span>`}</span>${S.readonly?"":`<button type="button" class="btn small ghost" data-act="prefs" data-r="${esc(r)}">${sum.length?"Edit":"Add"}</button>`}</div>`;
-  const bt=bdayText(r); const bi2=bdayInfo(r);
-  const bdayLine = bt ? `<div class="bday ${bi2.urgent?"urgent":""}"><span class="cake" aria-hidden="true"></span><span><b>${esc(bt)}</b> · ${esc(bi2.label)}${r!==S.me&&bi2.days>0?(bi2.urgent?" · time to buy something":" · start thinking about a gift"):""}</span></div>` : "";
-  let body = `<div class="section" style="--paper:var(--p-${r})">${bdayLine}<div class="listhead"><div class="row"><h2>${hide?"Your wish list":esc(poss(r))+" list"}</h2>`;
-  if(!S.loaded.items){ return head+body+`</div></div><div class="empty">Loading…</div></div>`; }
+  const nOwn=items.filter(visibleOnOwn).length;
+  let body = `<div class="section" style="--paper:var(--p-${r})">`;
+  if(!S.loaded.items){ return head+body+`<div class="empty">Loading…</div></div>`; }
   if(hide){
-    body += `<span class="hint">Allowance ${gbp(b)} · ${b?Math.round(sp.bought/b*100):0}% used</span></div>${prefsHtml}</div><div class="surprise"><span class="mini" style="--paper:var(--p-${r})" aria-hidden="true"></span><span>Add what you'd like with <b>Add idea</b>. You won't see what's been bought for you, or ideas the others suggest for you, until the gifts are given.</span></div>`;
+    body += `<div class="listbar"><h2>Your wish list</h2><span class="hint">Allowance ${gbp(b)} · ${b?Math.round(sp.bought/b*100):0}% used</span></div>`;
+    body += `<div class="seg" role="group" aria-label="Which list"><button type="button" aria-pressed="true">🎁 Wish list <span class="ct">${items.length}</span></button><button type="button" class="locked" data-act="lockedwraps" aria-disabled="true">🔒 Under wraps</button></div>`;
+    body += `<p class="seghint">Add what you'd like with <b>Add idea</b>. What's under wraps for you stays hidden until the gifts are given.</p>`;
     body += items.length ? items.map(i=>itemRow(i,true)).join("") : `<div class="empty">Your wish list is empty. Tap <b>Add idea</b> to start it.</div>`;
     const rec=receivedFor(r);
     if(rec.length) body += `<h3 style="margin-top:8px">Gifts you've received</h3><p class="hint" style="margin:0">Rate them out of 5. It helps everyone choose better next time.</p>` + rec.map(receivedRow).join("");
     return head + body + `</div>`;
   }
-  if(r==="Parents"){ body += `<span class="hint">${gbp(sp.bought)} bought${sp.planned?` · ${gbp(sp.planned)} claimed`:""}</span></div><div class="hint">Joint presents for Mum and Dad together. Each one counts half towards Mum's budget and half towards Dad's.</div>`; }
-  else body += `<span class="hint">${gbp(sp.bought)} bought${sp.planned?` · ${gbp(sp.planned)} claimed`:""} · budget ${gbp(b)}${pyTag(bi)}</span></div>`;
-
+  body += `<div class="listbar"><h2>${esc(label(r))}</h2><span class="hint">${gbp(sp.bought)} bought${sp.planned?` · ${gbp(sp.planned)} claimed`:""} · budget ${gbp(b)}${pyTag(bi)}</span></div>`;
   if(ov==="slight") body += `<div class="amber">Slightly over budget (${gbp(sp.bought-b)}, within 10%)</div>`;
   if(ov==="over") body += `<div class="err">Over budget by ${gbp(sp.bought-b)}</div>`;
-  body += prefsHtml + `</div><div class="filter" role="group" aria-label="Filter">${[["all","All"],["idea","Ideas"],["claimed","Claimed"],["bought","Bought"],["history","History & ratings"],["foryou","Gift ideas"]].map(([k,l])=>`<button type="button" data-act="filter" data-f="${k}" aria-pressed="${S.filter===k}">${l}</button>`).join("")}</div>`;
+  const tabs = isSibling(r) && !["history","foryou"].includes(S.filter);
+  if(tabs){
+    const all=shownItems(r); const cOwn=all.filter(visibleOnOwn).length, cW=all.length-cOwn;
+    const side=S.side==="wraps"?"wraps":"wish";
+    body += `<div class="seg" role="group" aria-label="Which list"><button type="button" data-act="side" data-s="wish" aria-pressed="${side==="wish"}">🎁 Wish list <span class="ct">${cOwn}</span></button><button type="button" data-act="side" data-s="wraps" aria-pressed="${side==="wraps"}">🤫 Under wraps <span class="ct">${cW}</span></button></div>`;
+    body += `<p class="seghint">${side==="wish"?`What ${esc(r)} has asked for.`:`Your secret ideas for ${esc(r)}. ${esc(r)} can't see this tab.`}</p>`;
+    items = items.filter(i=> side==="wish" ? visibleOnOwn(i) : !visibleOnOwn(i));
+  }
+  body += `<div class="filter" role="group" aria-label="Filter">${[["all","All"],["idea","Ideas"],["claimed","Claimed"],["bought","Bought"],["history","History & ratings"],["foryou","Gift ideas"]].map(([k,l])=>`<button type="button" data-act="filter" data-f="${k}" aria-pressed="${S.filter===k}">${l}</button>`).join("")}</div>`;
   if(S.filter==="history"){
     const hist=S.items.filter(i=>i.for===r && i.status==="bought").sort((a,b)=>Number(b.year)-Number(a.year));
     if(!hist.length) return head+body+`<div class="empty">Nothing bought for ${esc(r)} yet.</div></div>`;
@@ -653,12 +686,11 @@ function viewLists(){
   }
   if(S.filter==="foryou") return head + body + tasteCard(r) + `</div>`;
   if((S.filter==="all"||S.filter==="idea") && votable(r).length) body += picksCard(r);
-  if(!items.length) return head+body+`<div class="empty">${S.filter!=="all"?"Nothing here with that filter.":"No ideas yet for "+esc(r)+". Tap <b>Add idea</b> to start the list."}</div></div>`;
-  if(isSibling(r)){
-    const own=items.filter(visibleOnOwn), sugg=items.filter(i=>!visibleOnOwn(i));
-    body += `<h3 style="margin-top:6px">On ${esc(r)}'s wish list</h3>` + (own.length? own.map(i=>itemRow(i,false)).join("") : `<div class="empty">${esc(r)} hasn't added anything here yet.</div>`);
-    body += `<h3 style="margin-top:6px">Private suggestions <span style="text-transform:none;letter-spacing:0">· ${esc(r)} can't see these</span></h3>` + (sugg.length? sugg.map(i=>itemRow(i,false)).join("") : `<div class="empty">No secret ideas yet. Tap <b>Add idea</b> to suggest one ${esc(r)} won't see.</div>`);
-  } else body += items.map(i=>itemRow(i,false)).join("");
+  if(!items.length){
+    const msg = S.filter!=="all" ? "Nothing here with that filter." : tabs && S.side==="wraps" ? `Nothing under wraps yet. Tap <b>Add idea</b> to suggest something ${esc(r)} won't see.` : tabs ? `${esc(r)} hasn't added anything to their wish list yet.` : "No ideas yet for "+esc(r)+". Tap <b>Add idea</b> to start the list.";
+    return head+body+`<div class="empty">${msg}</div></div>`;
+  }
+  body += items.map(i=>itemRow(i,false)).join("");
   return head + body + `</div>`;
 }
 /* ---------- Christmas progress: who's sorted, what's still in the post ---------- */
@@ -670,13 +702,14 @@ function trackerCard(){
   const others=people.filter(r=>r!==S.me);
   const bought=S.items.filter(i=>i.status==="bought" && Number(i.year)===S.year && i.occasion!=="birthday" && !(i.for===S.me));
   const post=bought.filter(i=>(i.stage||"ordered")==="ordered").length, wrap=bought.filter(i=>i.stage==="arrived").length, wrapped=bought.filter(i=>i.stage==="wrapped").length;
-  return `<div class="card tracker"><div class="row"><b>Christmas progress</b><span class="hint">${done.length} of ${others.length} sorted</span></div>
-    <div class="trk">${others.map(r=>`<button type="button" class="trkp ${sortedFor(r)?"ok":""}" data-act="rec" data-r="${r}" style="--paper:var(--p-${r})"><span class="tick" aria-hidden="true">${sortedFor(r)?"✓":""}</span>${esc(r)}</button>`).join("")}<span class="trkp me" title="Your own presents are a surprise"><span class="tick">?</span>You</span></div>
-    ${bought.length?`<div class="hint">${post} on order · ${wrap} arrived, to wrap · ${wrapped} wrapped</div>`:""}</div>`;
+  const min=store("ribbon-trk-min")==="1";
+  return `<div class="card tracker"><button type="button" class="trkh" data-act="trkmin" aria-expanded="${!min}"><b>Christmas progress</b><span class="hint">${done.length} of ${others.length} sorted ${min?"▾":"▴"}</span></button>
+    ${min?"":`<div class="trk">${others.map(r=>`<button type="button" class="trkp ${sortedFor(r)?"ok":""}" data-act="rec" data-r="${r}" style="--paper:var(--p-${r})"><span class="tick" aria-hidden="true">${sortedFor(r)?"✓":""}</span>${esc(r)}</button>`).join("")}<span class="trkp me" title="Your own presents are a surprise"><span class="tick">?</span>You</span></div>
+    ${bought.length?`<div class="hint">${post} on order · ${wrap} arrived, to wrap · ${wrapped} wrapped</div>`:""}`}</div>`;
 }
 /* ---------- yearly tidy-up of old ideas ---------- */
 function oldIdeas(){ return S.items.filter(i=>i.status!=="bought" && Number(i.year)<S.year && Number(i.reviewedYear)!==S.year && (i.for!==S.me || !isSibling(i.for) || visibleOnOwn(i))); }
-function tidyBanner(){ const n=oldIdeas().length; if(!S.me||!n) return ""; return `<div class="notice" style="margin-top:12px;border-color:var(--ribbon)">${n} idea${n===1?" is":"s are"} carried over from earlier years. Still wanted? <button type="button" class="linkbtn" data-act="tidy">Review them</button></div>`; }
+function tidyBanner(){ const n=oldIdeas().length; if(!S.me||!n) return ""; return note("tidy-"+S.year, `${n} idea${n===1?" is":"s are"} carried over from earlier years. Still wanted? <button type="button" class="linkbtn" data-act="tidy">Review them</button>`, {css:"border-color:var(--ribbon)"}); }
 function tidySheet(){
   const list=oldIdeas().sort((a,b)=>String(a.for).localeCompare(b.for)||Number(a.year)-Number(b.year));
   if(!list.length){ closeSheet(); toast("All tidy"); render(); return; }
@@ -843,7 +876,7 @@ function words(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9 ]+/g," "
 function similar(a,b){ const A=new Set(words(a)), B=new Set(words(b)); if(!A.size||!B.size) return false; let n=0; A.forEach(w=>{ if(B.has(w)) n++; }); return n/Math.min(A.size,B.size)>=0.6; }
 function forHint(r){
   if(r===S.me) return "This goes on your own wish list. Everyone can see it, but you won't see if someone buys it.";
-  if(isSibling(r)) return "This is a private suggestion. "+r+" won't see it. Only the other two will.";
+  if(isSibling(r)) return "This goes under wraps. "+r+" won't see it. Only the other two will.";
   if(r==="Parents") return "A joint present for Mum and Dad together. It counts half towards each of their budgets.";
   return "Everyone can see ideas for "+r+".";
 }
@@ -1026,7 +1059,7 @@ function tourSteps(){ const me=S.me; return [
   {gift:true, title:`Welcome, ${me}`, body:"This app keeps everyone's wish lists, who's buying what, and who owes whom, all in one place. Tap the present to start the tour."},
   {sel:".recs", title:"Everyone's lists", body:"Tap a person to open their list. The bar shows how much of their budget has been spent."},
   {demo:true, title:"How a gift moves along", body:"Each gift goes through three stages. Tap the example gift to move it along."},
-  {sel:"#fab", title:"Adding ideas", body:"Tap here to add an idea. Put it on your own wish list, or suggest one for someone else. Suggestions are hidden from the person they're for. On each person's list you can also rank your top 3, and the family favourite shows as Top recommended."},
+  {sel:"#fab", title:"Adding ideas", body:"Tap here to add an idea. Put it on your own wish list, or suggest one for someone else. Suggestions go under wraps, hidden from the person they're for. On each person's list you can also rank your top 3, and the family favourite shows as Top recommended."},
   {sel:`.rec[data-r="${me}"]`, title:"Your list stays a surprise", body:"On your own list you only see the ideas you added. Whatever the others suggest or buy for you stays hidden until Christmas Day, or until the buyer marks it as given."},
   {sel:'.filter button[data-f="history"]', title:"Ratings and gift ideas", body:"Once gifts are given, everyone rates theirs out of 5. History & ratings shows what landed well, and Gift ideas uses those ratings to suggest presents they're likely to love. Parents' gifts are rated on their behalf."},
   {budget:true, title:"Going over or under budget", body:"Up to 10% over a budget shows amber. More than that shows red, so check with the others first. If you turn on budget carry-over in Budgets & splits, here's what happens the next year:"},
@@ -1037,7 +1070,7 @@ function tourSteps(){ const me=S.me; return [
 function startTour(){ S.view="lists"; if(S.rec===S.me) S.rec="Mum"; S.filter="all"; closeSheet(); render(); T={i:0,demo:0,opened:false}; drawTour(); }
 function endTour(){
   T=null; $("#tour").innerHTML="";
-  const p=S.profiles[S.me]; if(S.db && p && !p.tutorialDone){ S.db.doc("profiles/"+S.me).update({tutorialDone:true}).catch(()=>{}); }
+  const p=S.profiles[S.me]||{}; if(S.db && !p.tutorialDone){ S.profiles[S.me]=Object.assign({},p,{tutorialDone:true}); S.db.doc("profiles/"+S.me).set({tutorialDone:true},{merge:true}).catch(()=>{}); }
 }
 function drawTour(){
   if(!T){ $("#tour").innerHTML=""; return; }
@@ -1072,8 +1105,8 @@ document.addEventListener("click", ev=>{
 }, true);
 window.addEventListener("resize", ()=>{ if(T) drawTour(); });
 function maybeTour(){
-  if(T || !S.me || !S.loaded.profiles || !S.loaded.prefs) return; const p=S.profiles[S.me];
-  if(!p || p.tutorialDone || maybeTour.done) return;
+  if(T || !S.me || !S.loaded.profiles || !S.loaded.prefs) return; const p=S.profiles[S.me]||{};
+  if(p.tutorialDone || maybeTour.done) return;
   if(!(S.prefs[S.me]||{}).profileDone && !S.onboardDone){ if(!S.profilePrompted){ S.profilePrompted=true; prefsSheet(S.me,true); } return; }
   if($("#overlay").innerHTML) return;
   maybeTour.done=true; setTimeout(startTour,300);
@@ -1162,6 +1195,11 @@ document.addEventListener("click", async ev=>{
   if(a==="close"){ closeSheet(); return; }
   if(a==="rec"){ S.rec=t.dataset.r; store("gift-rec",S.rec); S.filter="all"; render(); return; }
   if(a==="filter"){ S.filter=t.dataset.f; render(); return; }
+  if(a==="dismissnote"){ store("ribbon-x-"+t.dataset.k,"1"); const n=t.closest(".notice"); if(n){ n.style.transition="opacity .2s"; n.style.opacity="0"; setTimeout(render,180); } return; }
+  if(a==="gprofile"){ giftProfileSheet(t.dataset.r); return; }
+  if(a==="side"){ S.side=t.dataset.s; render(); return; }
+  if(a==="lockedwraps"){ toast("That's where the others keep surprise ideas for you. It stays locked."); return; }
+  if(a==="trkmin"){ store("ribbon-trk-min", store("ribbon-trk-min")==="1"?"0":"1"); render(); return; }
   if(a==="lstep"){ const em=(document.querySelector('#main input[type=email]')||{}).value; S.login={step:t.dataset.s,msg:"",email:em||S.login.email||""}; render(); return; }
   if(a==="enablepush"){ t.disabled=true; const r=await RB.enablePush(S.me).catch(e=>({ok:false,err:e})); t.disabled=false; if(r.ok){ toast("Reminders are on for this phone"); } else toast(r.denied?"Notifications are blocked. Turn them on for Ribbon in your phone's Settings.":"Couldn't turn on reminders. Try again."); if(document.querySelector("#overlay .sheet")) accountSheet(); render(); return; }
   if(a==="disablepush"){ await RB.disablePush().catch(()=>{}); toast("Reminders are off for this phone"); accountSheet(); render(); return; }
@@ -1197,7 +1235,7 @@ document.addEventListener("click", async ev=>{
   if(a==="aiadd"){
     const x=S.ai&&S.ai.ideas&&S.ai.ideas[Number(t.dataset.k)]; if(!x||x.added) return; const r=S.ai.r;
     const body={year:S.year,for:r,title:String(x.title).slice(0,200),link:"",price:Number(x.price_gbp)>0?Math.round(Number(x.price_gbp)*100)/100:null,note:String(x.why||"").slice(0,200),mostWanted:false,status:"idea",claimedBy:"",paidBy:"",addedBy:S.me||"",createdAt:stamp(),updatedAt:stamp()};
-    if(await write(()=>S.db.collection("items").add(body))){ x.added=true; render(); toast(isSibling(r)?"Added as a private suggestion. "+r+" won't see it.":"Added to "+r+"'s list"); }
+    if(await write(()=>S.db.collection("items").add(body))){ x.added=true; render(); if(isSibling(r)) S.side="wraps"; toast(isSibling(r)?"Added under wraps. "+r+" won't see it.":"Added to "+r+"'s list"); }
     return;
   }
   if(a==="export"){ exportExcel(t); return; }
@@ -1298,7 +1336,7 @@ document.addEventListener("submit", async ev=>{
     if(f.dataset.id){ if(await write(()=>S.db.collection("items").doc(f.dataset.id).update(body),err)){ closeSheet(); toast("Saved"); } }
     else {
       if(!f.dataset.dupOk){ const pool=(d.for===S.me&&isSibling(d.for))?shownItems(d.for):listItems().filter(x=>x.for===d.for); const dup=pool.find(x=>similar(x.title,title)); if(dup){ f.dataset.dupOk="1"; err.textContent=`This looks like “${dup.title}”, which is already on ${d.for===S.me?"your":poss(d.for)} list. Tap Add to list again to add it anyway.`; return; } }
-      Object.assign(body,{year:S.year,status:"idea",claimedBy:"",paidBy:"",addedBy:S.me||"",createdAt:stamp()}); if(await write(()=>S.db.collection("items").add(body),err)){ S.rec=d.for; closeSheet(); toast("Added to "+d.for+"'s list"); render(); } }
+      Object.assign(body,{year:S.year,status:"idea",claimedBy:"",paidBy:"",addedBy:S.me||"",createdAt:stamp()}); if(await write(()=>S.db.collection("items").add(body),err)){ S.rec=d.for; if(isSibling(d.for)&&d.for!==S.me) S.side="wraps"; closeSheet(); toast("Added to "+d.for+"'s list"); render(); } }
   }
   if(f.id==="rankForm"){
     const r=f.dataset.r, err=f.querySelector("#rkErr"); if(!S.rankDraft.length){ err.textContent="Tap at least one idea."; return; }
